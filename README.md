@@ -1,6 +1,6 @@
 # Hermes Agent Railway Template
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/6BD5S-?referralCode=uTN7AS&utm_medium=integration&utm_source=template&utm_campaign=generic)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/hermes-railway-template?referralCode=uTN7AS&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 Deploy [Hermes Agent](https://github.com/NousResearch/hermes-agent) to Railway as a worker service with persistent state.
 
