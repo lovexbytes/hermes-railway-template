@@ -1,0 +1,10 @@
+.git
+.gitignore
+README.md
+railway.toml
+node_modules
+venv
+.venv
+__pycache__
+*.pyc
+*.log
