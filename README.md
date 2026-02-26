@@ -1,5 +1,7 @@
 # Hermes Agent Railway Template
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/6BD5S-?referralCode=uTN7AS&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
 Deploy [Hermes Agent](https://github.com/NousResearch/hermes-agent) to Railway as a worker service with persistent state.
 
 This template is worker-only: setup and configuration are done through Railway Variables, then the container bootstraps Hermes automatically on first run.
@@ -32,7 +34,23 @@ Template defaults (already included in `railway.toml`):
 - `HOME=/data`
 - `MESSAGING_CWD=/data/workspace`
 
-## Required variables
+## Default environment variables
+
+This template defaults to Telegram + OpenRouter. These are the default variables to fill when deploying:
+
+```env
+OPENROUTER_API_KEY=""
+TELEGRAM_BOT_TOKEN=""
+TELEGRAM_ALLOWED_USERS=""
+```
+
+You can add or change variables later in Railway service Variables.
+For the latest supported variables and behavior, follow upstream Hermes documentation:
+
+- https://github.com/NousResearch/hermes-agent
+- https://github.com/NousResearch/hermes-agent/blob/main/README.md
+
+## Required runtime variables
 
 You must set:
 
@@ -70,12 +88,7 @@ Provider selection tip:
 
 ## Environment variable reference
 
-For the full and latest list of Hermes environment variables, always refer to upstream docs:
-
-- https://github.com/NousResearch/hermes-agent
-- https://github.com/NousResearch/hermes-agent/blob/main/README.md
-
-This template documents only the most common Railway variables.
+For the full and up-to-date list, check out the [Hermes repository](https://github.com/NousResearch/hermes-agent).
 
 ## Simple usage guide
 
