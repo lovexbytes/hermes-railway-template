@@ -1,85 +1,135 @@
-# Hermes Agent Railway Template (no web setup)
+# Hermes Agent Railway Template
 
-This template deploys [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent) on Railway as a worker service, with no `/setup` web UI.
+Deploy [Hermes Agent](https://github.com/NousResearch/hermes-agent) to Railway as a worker service with persistent state.
 
-The deployment flow is:
+This template is worker-only: setup and configuration are done through Railway Variables, then the container bootstraps Hermes automatically on first run.
 
-1. You set required environment variables in Railway.
-2. On first boot, the container bootstraps `HERMES_HOME` on the mounted volume.
-3. On later boots, it reuses persisted state and starts `hermes gateway` immediately.
+## What you get
 
-## Why this template
+- Hermes gateway running as a Railway worker
+- First-boot bootstrap from environment variables
+- Persistent Hermes state on a Railway volume at `/data`
+- Telegram, Discord, or Slack support (at least one required)
 
-- No web setup UI (simpler and safer)
-- Persistent Hermes state on Railway volume (`/data`)
-- Explicit startup validation for required variables
-- Works with Telegram, Discord, or Slack (at least one required)
+## How it works
 
-## Required Railway Setup
+1. You configure required variables in Railway.
+2. On first boot, entrypoint initializes Hermes under `/data/.hermes`.
+3. On future boots, the same persisted state is reused.
+4. Container starts `hermes gateway`.
+
+## Railway deploy instructions
 
 In Railway Template Composer:
 
-1) Add a volume mounted at `/data`.
-2) Set environment variables (see below).
-3) Deploy as a worker service.
+1. Add a volume mounted at `/data`.
+2. Deploy as a worker service.
+3. Configure variables listed below.
 
-## Required Variables
+Template defaults (already included in `railway.toml`):
 
-You must configure:
+- `HERMES_HOME=/data/.hermes`
+- `HOME=/data`
+- `MESSAGING_CWD=/data/workspace`
 
-- At least one model provider key:
+## Required variables
+
+You must set:
+
+- At least one inference provider config:
   - `OPENROUTER_API_KEY`, or
-  - `OPENAI_API_KEY`, or
+  - `OPENAI_BASE_URL` + `OPENAI_API_KEY`, or
   - `ANTHROPIC_API_KEY`
 - At least one messaging platform:
   - Telegram: `TELEGRAM_BOT_TOKEN`
   - Discord: `DISCORD_BOT_TOKEN`
   - Slack: `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN`
 
-## Security Variables (strongly recommended)
-
-Set allowlists for your chosen platform(s):
+Strongly recommended allowlists:
 
 - `TELEGRAM_ALLOWED_USERS`
 - `DISCORD_ALLOWED_USERS`
 - `SLACK_ALLOWED_USERS`
 
-Optional global overrides:
+Allowlist format examples (comma-separated, no brackets, no quotes):
 
-- `GATEWAY_ALLOWED_USERS`
+- `TELEGRAM_ALLOWED_USERS=123456789,987654321`
+- `DISCORD_ALLOWED_USERS=123456789012345678,234567890123456789`
+- `SLACK_ALLOWED_USERS=U01234ABCDE,U09876WXYZ`
+
+Use plain comma-separated values like `123,456,789`.
+Do not use JSON or quoted arrays like `[123,456]` or `"123","456"`.
+
+Optional global controls:
+
 - `GATEWAY_ALLOW_ALL_USERS=true` (not recommended)
 
-If no allowlists are set and allow-all is false, gateway defaults to deny-all (you can still pair users via Hermes pairing flow).
+Provider selection tip:
 
-## Included Defaults
+- If you set multiple provider keys, set `HERMES_INFERENCE_PROVIDER` (for example: `openrouter`) to avoid auto-selection surprises.
 
-`railway.toml` sets:
+## Environment variable reference
 
-- `HERMES_HOME=/data/.hermes`
-- `HOME=/data`
-- `MESSAGING_CWD=/data/workspace`
+For the full and latest list of Hermes environment variables, always refer to upstream docs:
 
-This avoids split state paths and ensures persistence across redeploys.
+- https://github.com/NousResearch/hermes-agent
+- https://github.com/NousResearch/hermes-agent/blob/main/README.md
 
-## Runtime Behavior
+This template documents only the most common Railway variables.
 
-Entrypoint script (`scripts/entrypoint.sh`) does the following:
+## Simple usage guide
 
-- Validates required model/provider and platform vars
-- Writes managed runtime env file: `${HERMES_HOME}/.env`
-- Creates `${HERMES_HOME}/config.yaml` on first boot
-- Writes one-time init marker: `${HERMES_HOME}/.initialized`
+After deploy:
+
+1. Start a chat with your bot on Telegram/Discord/Slack.
+2. If using allowlists, ensure your user ID is included.
+3. Send a normal message (for example: `hello`).
+4. Hermes should respond via the configured model provider.
+
+Helpful first checks:
+
+- Confirm gateway logs show platform connection success.
+- Confirm volume mount exists at `/data`.
+- Confirm your provider variables are set and valid.
+
+## Running Hermes commands manually
+
+If you want to run `hermes ...` commands manually inside the deployed service (for example `hermes config`, `hermes model`, or `hermes pairing list`), use [Railway SSH](https://docs.railway.com/cli/ssh) to connect to the running container.
+
+Example commands after connecting:
+
+```bash
+hermes status
+hermes config
+hermes model
+hermes pairing list
+```
+
+## Runtime behavior
+
+Entrypoint (`scripts/entrypoint.sh`) does the following:
+
+- Validates required provider and platform variables
+- Writes runtime env to `${HERMES_HOME}/.env`
+- Creates `${HERMES_HOME}/config.yaml` if missing
+- Persists one-time marker `${HERMES_HOME}/.initialized`
 - Starts `hermes gateway`
 
-## Build Pinning
+## Troubleshooting
+
+- `401 Missing Authentication header`: provider/key mismatch (often wrong provider auto-selection or missing API key for selected provider).
+- Bot connected but no replies: check allowlist variables and user IDs.
+- Data lost after redeploy: verify Railway volume is mounted at `/data`.
+
+## Build pinning
 
 Docker build arg:
 
 - `HERMES_GIT_REF` (default: `main`)
 
-Override it in Railway if you want to pin a specific tag/commit.
+Override in Railway if you want to pin a tag or commit.
 
-## Local Smoke Test
+## Local smoke test
 
 ```bash
 docker build -t hermes-railway-template .
@@ -91,8 +141,3 @@ docker run --rm \
   -v "$(pwd)/.tmpdata:/data" \
   hermes-railway-template
 ```
-
-## Notes
-
-- This template intentionally does not expose HTTP endpoints.
-- Railway health checks should be process-based (worker lifecycle), not HTTP path based.
