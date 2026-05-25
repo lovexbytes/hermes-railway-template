@@ -30,12 +30,15 @@ This spec describes a set of targeted enhancements that turn the bot into a usef
 - Enriched photo workflow (multi-part reply: category, price band, IG caption, FB listing)
 - Lightweight natural-language reminders
 - UX fixes: suppress tool-call noise, fix routing, fix timezone
+- **Target Notion schema** (four linked databases: Items, Sales, Expenses, Sources) with dual MXN/USD currency tracking
+- **Hermes ongoing hygiene behaviors** to prevent schema drift and duplicate records
 
 **Explicitly out of scope:**
 - Styling/sourcing client-services side of the business (products only)
 - New external integrations beyond what Hermes already supports (no email pipeline, no FireCrawl scraping, no Google Sheets, no calendar)
 - Image processing or auto-posting
 - Forking the upstream `NousResearch/hermes-agent` repo (only the Railway template fork is modified)
+- **Bulk migration of existing Notion records** into the new schema — handled separately as a one-time data-entry session, not part of the code rollout
 
 ## Philosophy: thin fork, fat volume
 
@@ -104,8 +107,11 @@ Notion clean.
 - Local pickup/delivery in CDMX only — default any listing draft to that.
 
 # Profit formula
-profit = sale_price − purchase_price − repair_cost − platform_fees
-Show your work briefly when reporting profit.
+profit (MXN) = sale_price_mxn − purchase_price_mxn − total_related_expenses_mxn
+where total_related_expenses includes repairs, supplies, transport, and
+platform fees logged against the item.
+Show your work briefly when reporting profit, and always quote profit
+in MXN (her actual cash flow).
 
 # Voice
 Refined, warm, concise. Match the brand: "layered, personal, refined."
@@ -257,6 +263,22 @@ One commit (the Dockerfile change) plus two Railway env-var settings.
 
 **Verify:** Send a message that requires a tool call — chat is clean of tool traces. Fire the existing morning digest manually — lands in the new group. Set a test reminder for "1 minute from now" — fires at correct CDMX wall-clock time.
 
+### Phase 1.5 — Notion structural redesign (Section 7)
+
+Not a code change — a one-time setup of the new Notion structure. Blocks Phase 2 because the seeded business context references specific field names.
+
+Sub-steps:
+1. Create the four databases (Items, Sales, Expenses, Sources) with the schemas in Section 7.
+2. Configure select options (Status values, Material vocabulary, Listing platforms, Source types, Expense categories).
+3. Set up the views listed in Section 7.
+4. Add formulas: Profit MXN, Total expenses rollup, source avg margin rollup.
+5. Capture one populated Item record's screenshot to fill `notion_schema.md` with exact field names + Notion property IDs.
+6. Bulk migration of existing items into the new schema. Approach: filter the current chaotic list by what's still active inventory, log those into Items; everything else (truly stale, untracked, unclear) gets dropped or archived. **Do not try to migrate everything — be ruthless.** Quality over completeness.
+
+**Target completion:** same day as Phase 1, before Phase 2 begins.
+
+**Verify:** the four databases exist, are populated with at least 10–20 real items, views work, profit formula computes correctly on a sold item.
+
 ### Phase 2 — Business context (Component 1)
 
 One commit adding `business_context/`, the seeding step in `entrypoint.sh`, and the include line in Hermes' system-prompt file.
@@ -288,6 +310,97 @@ Ashley uses the bot for one normal week and:
 - She does not see any tool-progress traces in chat
 - She does not mention Excel because she doesn't miss it
 
+## Section 7: Target Notion schema + Hermes hygiene behaviors
+
+The current Notion workspace is a single unstructured list mixing inventory, expenses, and source/seller notes. Items are identified by visual recall, not IDs. Sales are not tracked structurally. This makes the morning digest, photo workflow, and conditional reminders all unreliable — they assume a queryable schema that doesn't exist.
+
+This section defines the *target* schema. The actual migration of existing data is handled separately (see Rollout below).
+
+### Four linked databases, all inside the one Raw Valued Notion workspace
+
+**1. Items** — master inventory (one row = one physical thing)
+
+| Field | Type | Notes |
+|---|---|---|
+| Item ID | auto-ID | e.g., `ITM-001`. Solves the "which green chair?" problem. |
+| Short name | text | Ashley's mnemonic. Not used for ID. |
+| Photos | files & media | Multiple per item. |
+| Category | select | Art / Details / Glassware / Lighting / Rugs / Seating / Storage / Tables. |
+| Era / style | text | "60s–70s mid-century mexicano", "art deco", etc. |
+| Materials | multi-select | wood / metal / glass / velvet / rattan / brass / leather / ceramic… |
+| Status | select | Sourcing → In stock → Listed → Sold → Held (styling). |
+| Purchase price MXN | number | What she paid (primary cash-flow currency). |
+| Purchase price USD | number | Same, in USD at acquisition time. |
+| Asking price MXN | number | |
+| Asking price USD | number | |
+| Sale price MXN | number | Populated on sale. |
+| Sale price USD | number | Same. |
+| Date acquired | date | |
+| Date listed | date | Drives stale-listing detection. |
+| Date sold | date | |
+| Source | relation → **Sources** | Where the piece came from. |
+| Sales | relation → **Sales** | |
+| Expenses | relation → **Expenses** | Repair costs etc. |
+| Total expenses MXN | rollup | Sum of ALL related Expenses (MXN), all categories — repair, supplies, transport, fees. |
+| Profit MXN | formula | `sale_price_mxn − purchase_price_mxn − total_expenses_mxn`. |
+| Listing platforms | multi-select | FB Marketplace / IG / Chairish / In-person / website. |
+| Notes | long text | |
+
+Profit is computed in MXN only — that's her actual cash flow. USD prices are for display / international audience signaling, not internal accounting.
+
+**2. Sales** — one row per sale, linked to Item
+- Sale ID (auto), Item (relation), Buyer name, Sale price MXN, Sale price USD, Platform, Sale date, Delivery method (pickup/delivery/in-person), Notes.
+
+**3. Expenses** — one row per cost
+- Expense ID (auto), Description, Amount MXN, Amount USD, Category (item-cost / repair / supplies / transport / fees / other), Date, Related item (relation, optional), Receipt (file, optional).
+
+**4. Sources** — one row per seller/market (replaces the current ad-hoc sourcing notes)
+- Source name (e.g., "Lagunilla", "Don Memo at Tianguis Pino Suárez"), Type (market / vendor / online / gift / found), Notes, Items sourced (rollup count), Avg profit margin (rollup formula).
+
+### Views to set up on Items
+
+- **By status** (default operational view, kanban-style)
+- **Stale listings** (filter: status = Listed AND date listed > 14 days ago)
+- **Missing data** (filter: status ∈ Listed/Sold AND any required field is empty)
+- **This month's sales** (filter by date sold)
+- **Profit ranking** (sort by Profit MXN, descending)
+- **Source quality** view on Sources DB, sorted by avg margin
+
+### Currency handling (dual MXN + USD)
+
+Both currencies stored per price field. To minimize Ashley's typing burden, Hermes auto-fills the other currency when she gives one:
+
+```
+Ashley: just bought the rattan chair for 1800 pesos
+Bot:    Logged purchase price MXN 1,800 / USD ~95 at today's rate (≈18.9 MXN/USD).
+        Confirm or correct?
+```
+
+She confirms or overrides; both fields get stored. The bot uses a live FX rate at log time (cached daily) so historical records aren't corrupted by rate drift.
+
+### Hermes ongoing hygiene behaviors (added to `system.md`)
+
+```
+# Notion hygiene
+- Before creating a new Item, search for similar entries (same category +
+  similar short name + recent date). If found, ask if this is the same
+  item being re-photographed or a true duplicate.
+- Fill every field you can infer from her message. Ask for missing
+  required fields (category, purchase price, source) before writing.
+- If she mentions a sale in passing ("I sold the brass lamp yesterday
+  for $180"), offer to create the corresponding Sales record AND update
+  the Item's status/sale price/date sold in one go.
+- Sources field is low-friction: if she says "found this at Lagunilla,"
+  look up the existing Lagunilla Source and link it. Only create a new
+  Source if it doesn't exist.
+- Use the established multi-select vocabularies for Materials and
+  Listing platforms. If a new term is needed, ask: "I don't see 'cane'
+  in your Materials list — should I add it as a new option?"
+- For prices: she may give either MXN or USD. Use a current FX rate
+  (cached daily) to auto-fill the other currency. Always show the
+  conversion before writing so she can correct it.
+```
+
 ## Open items to resolve during implementation planning
 
 These are deliberately deferred from the design because answering them requires reading upstream source rather than design choices:
@@ -295,7 +408,8 @@ These are deliberately deferred from the design because answering them requires 
 1. **Exact path of Hermes' system-prompt file** in `${HERMES_HOME}` (where the one-line include goes).
 2. **Exact valid value for `HERMES_TOOL_PROGRESS`** to suppress traces (likely `false`, `silent`, `off`, or `none` — verify in upstream source/docs).
 3. **Exact mechanism for creating/modifying Hermes cron entries** — whether via `hermes cron add` CLI, direct files in `${HERMES_HOME}/cron/`, or both.
-4. **Notion DB field names** — Fede provides a screenshot of one record so `notion_schema.md` can be filled in concretely.
+4. **Notion DB internal IDs** — once the four databases are created, capture their Notion IDs so `notion_schema.md` and Hermes' API calls reference them correctly.
 5. **Group chat ID** — Fede creates the 3-person Telegram group and supplies the chat ID for `TELEGRAM_HOME_CHANNEL`.
+6. **FX rate source** — which API/tool Hermes uses for live MXN↔USD conversion (e.g., a free public endpoint, with daily caching).
 
 None of these block the design — they're concrete questions with concrete answers, to be resolved as the first step of implementation.
