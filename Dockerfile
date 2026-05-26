@@ -30,12 +30,14 @@ RUN apt-get update \
     nodejs \
     npm \
     tini \
+    tzdata \
   && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/opt/venv/bin:${PATH}" \
   PYTHONUNBUFFERED=1 \
   HERMES_HOME=/data/.hermes \
-  HOME=/data
+  HOME=/data \
+  TZ=America/Mexico_City
 
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /opt/hermes-agent /opt/hermes-agent
