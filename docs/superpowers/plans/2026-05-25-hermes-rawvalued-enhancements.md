@@ -21,14 +21,29 @@
 What this plan creates or modifies in the fork:
 
 ```
-Dockerfile                          MODIFY — add TZ env, ensure tzdata
-scripts/entrypoint.sh               MODIFY — add business_context seeding
-business_context/                   NEW directory
-├── system.md                       NEW — Hermes system prompt (the brain)
-├── notion_schema.md                NEW — exact Notion field names + IDs
+Dockerfile                          MODIFY — add TZ env, ensure tzdata,
+                                              copy business_context into image
+scripts/entrypoint.sh               MODIFY — seed Hermes context files on boot
+business_context/                   NEW directory in repo
+├── SOUL.md                         NEW — Hermes system prompt (auto-loaded
+                                          when seeded to HERMES_HOME root)
+├── notion_schema.md                NEW — Notion field names + DB IDs
 ├── photo_workflow.md               NEW — photo reply rules
-└── digest_format.md                NEW — morning digest template
+└── digest_format.md                NEW — morning digest prompt template
 docs/                               (already exists from spec phase)
+```
+
+**On-volume layout after first boot:**
+
+```
+${HERMES_HOME}/
+├── SOUL.md                         seeded from business_context/SOUL.md;
+                                    Hermes auto-loads on every conversation
+├── business_context/
+│   ├── notion_schema.md            read on-demand by Hermes for Notion work
+│   ├── photo_workflow.md           read on-demand for photo messages
+│   └── digest_format.md            referenced by the cron digest prompt
+└── config.yaml                     existing — gains display.tool_progress=off
 ```
 
 What this plan creates outside the fork:
@@ -335,14 +350,25 @@ git push origin <branch>
 
 - [ ] **Step 1: In Railway dashboard, open the service Variables tab**
 
-- [ ] **Step 2: Add or set the following variables**
+- [ ] **Step 2: Set the routing variable**
 
 ```
-HERMES_TOOL_PROGRESS=<value-from-task-0.2>
 TELEGRAM_HOME_CHANNEL=<chat-id-from-task-1.3>
 ```
 
-(If Task 0.2 found two relevant vars, set both.)
+**Note on tool-progress suppression:** Per Task 0.2's finding, `HERMES_TOOL_PROGRESS` is deprecated. The new mechanism is `display.tool_progress` in `${HERMES_HOME}/config.yaml`. Two ways to set it:
+
+**Option A — leverage Hermes' auto-migration (easier).** Set the deprecated env var `HERMES_TOOL_PROGRESS=false` in Railway. On the next startup, Hermes detects the deprecated var and writes `display.tool_progress=off` into config.yaml automatically. You can then remove the env var.
+
+**Option B — set the config directly.** SSH into the running container after Phase 0:
+
+```bash
+hermes config set display.tool_progress off
+```
+
+Then redeploy.
+
+Choose A for less manual work. Either way: verify in Step 5.
 
 - [ ] **Step 3: Trigger a redeploy**
 
@@ -615,10 +641,12 @@ Repeat for all 4 databases.
 
 ## Phase 2 — Business context (the brain transplant)
 
-### Task 2.1: Create `business_context/system.md`
+### Task 2.1: Create `business_context/SOUL.md`
 
 **Files:**
-- Create: `business_context/system.md`
+- Create: `business_context/SOUL.md`
+
+**Why SOUL.md:** Per upstream Hermes (resolved in Task 0.1), `${HERMES_HOME}/SOUL.md` is auto-loaded as the global personality on every conversation. No config flag or include line needed.
 
 - [ ] **Step 1: Create the file with this content**
 
@@ -627,6 +655,16 @@ You are the ops assistant for Raw Valued, a vintage and found-objects
 design studio in Mexico City. The founder, Ashley, runs sourcing,
 styling, and sales; you help her stay organized, do the math, and keep
 Notion clean.
+
+# Reference docs
+
+Operational reference material lives at ${HERMES_HOME}/business_context/.
+Read these files (use your file-reading tool) when their topic comes up:
+- notion_schema.md — exact Notion field names + database IDs.
+  Read before any Notion read/write to avoid invented fields.
+- photo_workflow.md — how to respond when Ashley sends a photo.
+  Read on every photo message.
+- digest_format.md — the morning digest template (used by cron jobs).
 
 # Operating rules
 - Notion is the single source of truth. Never invent fields. If a field
@@ -687,8 +725,8 @@ Warmth is welcome but skip cheesy or cliché pep talks.
 - [ ] **Step 2: Commit**
 
 ```bash
-git add business_context/system.md
-git commit -m "feat: add Raw Valued business context system prompt"
+git add business_context/SOUL.md
+git commit -m "feat: add Raw Valued SOUL.md (Hermes system prompt)"
 ```
 
 ### Task 2.2: Create `business_context/notion_schema.md` from the captured details
@@ -934,33 +972,28 @@ git add business_context/digest_format.md
 git commit -m "feat: add morning digest format"
 ```
 
-### Task 2.5: Update `entrypoint.sh` to seed business_context on boot
+### Task 2.5: Update `entrypoint.sh` to seed Hermes context files on boot
 
 **Files:**
 - Modify: `scripts/entrypoint.sh`
+- Modify: `Dockerfile`
 
-- [ ] **Step 1: Open the file and find this line**
+**Seeding model:** `SOUL.md` goes to `${HERMES_HOME}/SOUL.md` (Hermes auto-loads it from there). The three reference docs go to `${HERMES_HOME}/business_context/` (read by Hermes on-demand via tool calls). All copies use `cp -n` (no-clobber) so on-volume edits persist across redeploys.
+
+- [ ] **Step 1: Find this line in `scripts/entrypoint.sh` (around line 13)**
 
 ```bash
 mkdir -p "${HERMES_HOME}" "${HERMES_HOME}/logs" "${HERMES_HOME}/sessions" "${HERMES_HOME}/cron" "${HERMES_HOME}/pairing" "${DEFAULT_TERMINAL_CWD}"
 ```
 
-(Currently at line 13.)
-
-- [ ] **Step 2: Add a new line directly below**
-
-```bash
-mkdir -p "${HERMES_HOME}/business_context"
-```
-
-So you have:
+Add the business_context subdir below it:
 
 ```bash
 mkdir -p "${HERMES_HOME}" "${HERMES_HOME}/logs" "${HERMES_HOME}/sessions" "${HERMES_HOME}/cron" "${HERMES_HOME}/pairing" "${DEFAULT_TERMINAL_CWD}"
 mkdir -p "${HERMES_HOME}/business_context"
 ```
 
-- [ ] **Step 3: Add the seeding logic before the `exec hermes gateway` line at the end**
+- [ ] **Step 2: Add the seeding block before the final `exec hermes gateway` line**
 
 Find:
 
@@ -970,13 +1003,22 @@ unset MESSAGING_CWD
 exec hermes gateway
 ```
 
-Add a new block before it:
+Insert this block before it:
 
 ```bash
-# Seed business context files (no-clobber — preserves on-volume edits)
+# Seed Hermes context files on first boot (cp -n preserves volume edits)
 if [[ -d /app/business_context ]]; then
-  echo "[bootstrap] Seeding business_context files (no-clobber)..."
-  cp -n /app/business_context/*.md "${HERMES_HOME}/business_context/" || true
+  echo "[bootstrap] Seeding Hermes context (no-clobber)..."
+  # SOUL.md goes to HERMES_HOME root — auto-loaded by Hermes
+  if [[ -f /app/business_context/SOUL.md ]]; then
+    cp -n /app/business_context/SOUL.md "${HERMES_HOME}/SOUL.md" 2>/dev/null || true
+  fi
+  # Reference docs go to HERMES_HOME/business_context — read on-demand
+  for f in /app/business_context/*.md; do
+    base="$(basename "$f")"
+    [[ "$base" == "SOUL.md" ]] && continue
+    cp -n "$f" "${HERMES_HOME}/business_context/${base}" 2>/dev/null || true
+  done
 fi
 
 echo "[bootstrap] Starting Hermes gateway..."
@@ -984,9 +1026,9 @@ unset MESSAGING_CWD
 exec hermes gateway
 ```
 
-- [ ] **Step 4: Update Dockerfile to copy `business_context/` into the image**
+- [ ] **Step 3: Update Dockerfile to copy `business_context/` into the image**
 
-In Dockerfile, find:
+In Dockerfile runtime stage, find:
 
 ```dockerfile
 WORKDIR /app
@@ -1003,53 +1045,37 @@ COPY business_context /app/business_context
 RUN chmod +x /app/scripts/entrypoint.sh
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add scripts/entrypoint.sh Dockerfile
-git commit -m "feat: seed business_context onto volume on boot
+git commit -m "feat: seed SOUL.md + business_context onto volume on boot
 
-Copies business_context/*.md into HERMES_HOME on container start
-using cp -n (no-clobber), so volume edits persist across redeploys."
+SOUL.md lands at HERMES_HOME root where Hermes auto-loads it as the
+global personality. notion_schema.md / photo_workflow.md /
+digest_format.md land in HERMES_HOME/business_context/ where Hermes
+reads them on demand via tool calls. cp -n preserves on-volume edits."
 ```
 
-### Task 2.6: Wire the system prompt to load `system.md`
+### Task 2.6: Verify SOUL.md auto-loading
 
-**Files:**
-- Depends on Task 0.1 outcome. Modify whichever Hermes config file or prompt file owns the system prompt.
+**Why simplified:** Task 0.1 confirmed Hermes auto-loads `${HERMES_HOME}/SOUL.md` from the volume — no config flag, env var, or include file needed. This task is now just verification.
 
-- [ ] **Step 1: Use the path resolved in Task 0.1**
-
-Likely candidates:
-- A YAML config (`${HERMES_HOME}/config.yaml`) with a `system_prompt_file:` field
-- A markdown file Hermes loads by convention (`${HERMES_HOME}/system.md` or similar)
-- An env var `HERMES_SYSTEM_PROMPT_PATH`
-
-- [ ] **Step 2: Make Hermes load `${HERMES_HOME}/business_context/system.md`**
-
-Two implementation paths depending on Task 0.1's finding:
-
-**Path A — Hermes reads a file at a fixed path.** Then in the entrypoint, write a tiny stub at that path that includes our file:
+- [ ] **Step 1: SSH into Railway and verify SOUL.md exists**
 
 ```bash
-# In entrypoint.sh, after the cp -n block:
-if [[ ! -f "${HERMES_HOME}/<hermes-default-prompt-path>" ]]; then
-  cat > "${HERMES_HOME}/<hermes-default-prompt-path>" <<EOF
-$(cat ${HERMES_HOME}/business_context/system.md)
-EOF
-fi
+railway ssh
+ls -la "${HERMES_HOME}/SOUL.md"
+head -20 "${HERMES_HOME}/SOUL.md"
 ```
 
-**Path B — Hermes accepts an env var or config field pointing to any file.** Then just set it in Railway env vars to `${HERMES_HOME}/business_context/system.md`. No code change.
+Expected: file exists, content matches `business_context/SOUL.md` from the repo.
 
-Use whichever path matches reality.
+- [ ] **Step 2: Verify Hermes loaded it**
 
-- [ ] **Step 3: Commit if a code change was made**
+In the bot DM, send: `What is your operating brief?`
 
-```bash
-git add scripts/entrypoint.sh
-git commit -m "feat: wire Hermes to load business_context/system.md as system prompt"
-```
+Expected: response references "Raw Valued ops assistant" and the contents of SOUL.md. If response is generic, SOUL.md wasn't loaded — check (a) file is at the right path, (b) container was restarted after seeding, (c) `HERMES_MD_NAMES` env var hasn't been overridden.
 
 ### Task 2.7: Deploy and verify Phase 2
 
