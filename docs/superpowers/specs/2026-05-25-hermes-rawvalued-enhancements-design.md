@@ -401,15 +401,21 @@ She confirms or overrides; both fields get stored. The bot uses a live FX rate a
   conversion before writing so she can correct it.
 ```
 
-## Open items to resolve during implementation planning
+## Open items — resolution log
 
-These are deliberately deferred from the design because answering them requires reading upstream source rather than design choices:
+These were deferred from the design because answering them required reading upstream source. Findings as they're resolved:
 
-1. **Exact path of Hermes' system-prompt file** in `${HERMES_HOME}` (where the one-line include goes).
-2. **Exact valid value for `HERMES_TOOL_PROGRESS`** to suppress traces (likely `false`, `silent`, `off`, or `none` — verify in upstream source/docs).
-3. **Exact mechanism for creating/modifying Hermes cron entries** — whether via `hermes cron add` CLI, direct files in `${HERMES_HOME}/cron/`, or both.
-4. **Notion DB internal IDs** — once the four databases are created, capture their Notion IDs so `notion_schema.md` and Hermes' API calls reference them correctly.
-5. **Group chat ID** — Fede creates the 3-person Telegram group and supplies the chat ID for `TELEGRAM_HOME_CHANNEL`.
-6. **FX rate source** — which API/tool Hermes uses for live MXN↔USD conversion (e.g., a free public endpoint, with daily caching).
+1. **Hermes' system-prompt file location (RESOLVED 2026-05-25):** `${HERMES_HOME}/SOUL.md`. Hermes auto-loads this file on startup as the global personality/persona — no config flag required. Per `HERMES_MD_NAMES` env var, default loaded files are `AGENTS.md,CLAUDE.md,.cursorrules,SOUL.md`. We'll write our business context to SOUL.md.
 
-None of these block the design — they're concrete questions with concrete answers, to be resolved as the first step of implementation.
+2. **`HERMES_TOOL_PROGRESS` value (RESOLVED 2026-05-25):** Both `HERMES_TOOL_PROGRESS` and `HERMES_TOOL_PROGRESS_MODE` env vars are **deprecated**. Replaced by the `display.tool_progress` field in `${HERMES_HOME}/config.yaml`, valid values: `off | new | all | verbose`. We want `off`. Three ways to set it:
+   - Edit `${HERMES_HOME}/config.yaml` directly (preferred since Hermes already manages it)
+   - Run `hermes config set display.tool_progress off` via CLI
+   - Set deprecated `HERMES_TOOL_PROGRESS=false` — Hermes' migration code auto-converts to `display.tool_progress=off` on next startup (line 3710 of `hermes_cli/config.py`)
+
+3. **Exact mechanism for creating/modifying Hermes cron entries** — to be resolved in Task 0.3 (requires SSH into running container).
+
+4. **Notion DB internal IDs** — captured during Task 1.5.9.
+
+5. **Group chat ID** — captured during Task 1.3 (Fede creates the Telegram group).
+
+6. **FX rate source (RESOLVED 2026-05-25):** `https://api.frankfurter.app/latest?from=USD&to=MXN` — free, no API key, ECB-sourced daily rates. Cached daily on the volume to minimize calls.
