@@ -57,6 +57,7 @@ For the latest supported variables and behavior, follow upstream Hermes document
 You must set:
 
 - At least one inference provider config:
+  - `EVOLINK_API_KEY`, or
   - `OPENROUTER_API_KEY`, or
   - `OPENAI_BASE_URL` + `OPENAI_API_KEY`, or
   - `ANTHROPIC_API_KEY`
@@ -87,6 +88,11 @@ Optional global controls:
 Provider selection tip:
 
 - If you set multiple provider keys, set `HERMES_INFERENCE_PROVIDER` (for example: `openrouter`) to avoid auto-selection surprises.
+- When `EVOLINK_API_KEY` is set, this template automatically maps it to Hermes' OpenAI-compatible provider settings:
+  - `OPENAI_BASE_URL=https://direct.evolink.ai/v1`
+  - `OPENAI_API_KEY=$EVOLINK_API_KEY`
+  - `HERMES_INFERENCE_PROVIDER=openai`
+  - `LLM_MODEL=gpt-5.2`
 
 ## Environment variable reference
 
@@ -139,6 +145,7 @@ hermes pairing list
 Entrypoint (`scripts/entrypoint.sh`) does the following:
 
 - Validates required provider and platform variables
+- Maps `EVOLINK_API_KEY` to Hermes' OpenAI-compatible provider environment
 - Writes runtime env to `${HERMES_HOME}/.env`
 - Creates `${HERMES_HOME}/config.yaml` if missing
 - Migrates deprecated `MESSAGING_CWD` from `${HERMES_HOME}/.env` into `config.yaml` and removes it from persisted env
