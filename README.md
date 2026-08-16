@@ -57,9 +57,19 @@ For the latest supported variables and behavior, follow upstream Hermes document
 You must set:
 
 - At least one inference provider config:
-  - `OPENROUTER_API_KEY`, or
-  - `OPENAI_BASE_URL` + `OPENAI_API_KEY`, or
-  - `ANTHROPIC_API_KEY`
+  - OpenRouter: `OPENROUTER_API_KEY`
+  - OpenAI / OpenAI-compatible endpoint: `OPENAI_API_KEY` and optionally `OPENAI_BASE_URL`
+  - Anthropic: `ANTHROPIC_API_KEY` or `ANTHROPIC_TOKEN`
+  - Google Gemini: `GOOGLE_API_KEY` or `GEMINI_API_KEY`
+  - xAI: `XAI_API_KEY`
+  - DeepSeek: `DEEPSEEK_API_KEY`
+  - DashScope: `DASHSCOPE_API_KEY`
+  - Kimi/Moonshot: `KIMI_API_KEY`
+  - GLM/Z.AI: `GLM_API_KEY`
+  - Hugging Face: `HF_TOKEN`
+  - Vercel AI Gateway: `AI_GATEWAY_API_KEY`
+  - MiniMax: `MINIMAX_API_KEY`
+  - GitHub Copilot: `COPILOT_GITHUB_TOKEN`
 - At least one messaging platform:
   - Telegram: `TELEGRAM_BOT_TOKEN`
   - Discord: `DISCORD_BOT_TOKEN`
@@ -86,7 +96,7 @@ Optional global controls:
 
 Provider selection tip:
 
-- If you set multiple provider keys, set `HERMES_INFERENCE_PROVIDER` (for example: `openrouter`) to avoid auto-selection surprises.
+- If you set multiple provider keys, set `HERMES_INFERENCE_PROVIDER` (for example: `openrouter`, `openai`, `anthropic`, `gemini`, `xai`, `deepseek`, `kimi`, `glm`, or `dashscope`) to avoid auto-selection surprises.
 
 ## Environment variable reference
 
