@@ -8,4 +8,3 @@ requiredMountPath = "/data"
 [variables]
 HERMES_HOME = "/data/.hermes"
 HOME = "/data"
-AGENT_CACHE_MEMORY_HIGH_MB = "750"
