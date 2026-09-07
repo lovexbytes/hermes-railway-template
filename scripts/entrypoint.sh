@@ -156,6 +156,22 @@ migrate_legacy_messaging_cwd() {
   fi
 }
 
+configure_agent_cache_memory_limit() {
+  local value="${AGENT_CACHE_MEMORY_HIGH_MB:-}"
+
+  if [[ -z "$value" ]]; then
+    return 0
+  fi
+
+  if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[bootstrap] ERROR: AGENT_CACHE_MEMORY_HIGH_MB must be a positive integer in MB." >&2
+    exit 1
+  fi
+
+  echo "[bootstrap] Setting Hermes agent-cache anonymous-RSS budget to ${value} MB."
+  hermes config set agent.agent_cache.memory_high_mb "$value"
+}
+
 if ! has_valid_provider_config; then
   echo "[bootstrap] ERROR: Configure a provider: OPENROUTER_API_KEY, or OPENAI_BASE_URL+OPENAI_API_KEY, or ANTHROPIC_API_KEY." >&2
   exit 1
@@ -164,6 +180,7 @@ fi
 validate_platforms
 
 migrate_legacy_messaging_cwd
+configure_agent_cache_memory_limit
 
 echo "[bootstrap] Writing runtime env to ${ENV_FILE}"
 {

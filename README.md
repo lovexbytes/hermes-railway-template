@@ -32,8 +32,10 @@ Template defaults (already included in `railway.toml`):
 
 - `HERMES_HOME=/data/.hermes`
 - `HOME=/data`
+- `AGENT_CACHE_MEMORY_HIGH_MB=750`
 
 Hermes terminal sessions default to `/data/workspace` via `${HERMES_HOME}/config.yaml`.
+The agent-cache setting is written to `agent.agent_cache.memory_high_mb` in that persisted config before the gateway starts.
 
 ## Default environment variables
 
@@ -44,6 +46,7 @@ HERMES_GIT_REF=""
 OPENROUTER_API_KEY=""
 TELEGRAM_BOT_TOKEN=""
 TELEGRAM_ALLOWED_USERS=""
+AGENT_CACHE_MEMORY_HIGH_MB="750"
 ```
 
 You can add or change variables later in Railway service Variables.
@@ -93,6 +96,25 @@ Do not use JSON or quoted arrays like `[123,456]` or `"123","456"`.
 Optional global controls:
 
 - `GATEWAY_ALLOW_ALL_USERS=true` (not recommended)
+
+## Agent-cache memory budget
+
+The template defaults `AGENT_CACHE_MEMORY_HIGH_MB` to `750`. On every startup, the entrypoint validates this as a positive integer and writes it through Hermes' own configuration command to:
+
+```yaml
+agent:
+  agent_cache:
+    memory_high_mb: 750
+```
+
+This is a template-level Railway variable mapped to the supported Hermes configuration setting; it is not a Python runtime control or a patch to Hermes. The budget applies to the gateway process's anonymous RSS used by cached session agents. It is not a hard cap on total Railway service memory, which can also include filesystem page cache, kernel memory, and child processes.
+
+Precedence and persistence:
+
+- When `AGENT_CACHE_MEMORY_HIGH_MB` is set, its value is authoritative and is written to `${HERMES_HOME}/config.yaml` before the gateway starts.
+- Changing the Railway variable takes effect on the next deploy or restart.
+- When the variable is unset, the entrypoint preserves the existing YAML value.
+- Because `${HERMES_HOME}` is stored on the `/data` volume, the last written YAML value persists across redeployments.
 
 Provider selection tip:
 
@@ -152,6 +174,7 @@ Entrypoint (`scripts/entrypoint.sh`) does the following:
 - Writes runtime env to `${HERMES_HOME}/.env`
 - Creates `${HERMES_HOME}/config.yaml` if missing
 - Migrates deprecated `MESSAGING_CWD` from `${HERMES_HOME}/.env` into `config.yaml` and removes it from persisted env
+- Maps `AGENT_CACHE_MEMORY_HIGH_MB` to Hermes' supported `agent.agent_cache.memory_high_mb` config setting
 - Persists one-time marker `${HERMES_HOME}/.initialized`
 - Starts `hermes gateway`
 
