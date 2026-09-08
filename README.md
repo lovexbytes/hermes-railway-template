@@ -28,12 +28,30 @@ In Railway Template Composer:
 2. Deploy as a worker service.
 3. Configure variables listed below.
 
-Template defaults (already included in `railway.toml`):
+Template defaults (declared in `.railway/railway.ts`):
 
 - `HERMES_HOME=/data/.hermes`
 - `HOME=/data`
 
 Hermes terminal sessions default to `/data/workspace` via `${HERMES_HOME}/config.yaml`.
+
+## Railway Infrastructure as Code
+
+Railway configuration is defined with the supported TypeScript IaC format in
+`.railway/railway.ts`; the deprecated `railway.toml` Config as Code file has
+been removed.
+
+After linking the repository to the intended Railway project and environment:
+
+```bash
+npm install
+npm run railway:plan
+npm run railway:apply
+```
+
+Always review the plan before applying it. Infrastructure as Code manages the
+linked Railway environment, while the template's deployment button remains the
+normal first-deploy path for end users.
 
 ## Default environment variables
 

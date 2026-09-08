@@ -1,0 +1,17 @@
+{
+  "name": "hermes-railway-template",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 .railway/railway.ts",
+    "railway:plan": "railway config plan",
+    "railway:apply": "railway config apply"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "railway": "^3.11.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,7 +1,9 @@
 .git
 .gitignore
 README.md
-railway.toml
+.railway
+package.json
+package-lock.json
 node_modules
 venv
 .venv
