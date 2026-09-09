@@ -2,7 +2,7 @@
 set -euo pipefail
 
 export HERMES_HOME="${HERMES_HOME:-/data/.hermes}"
-export HOME="${HOME:-/data}"
+export HOME=/data
 LEGACY_MESSAGING_CWD="${MESSAGING_CWD:-/data/workspace}"
 
 INIT_MARKER="${HERMES_HOME}/.initialized"

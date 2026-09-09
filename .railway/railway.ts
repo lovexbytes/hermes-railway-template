@@ -10,6 +10,9 @@ const hermes = service("hermes", {
   },
   env: {
     HERMES_HOME: "/data/.hermes",
+    HERMES_IMAGE_VERSION: "latest",
+    HERMES_WRITE_SAFE_ROOT: "/data",
+    HERMES_LAZY_INSTALL_TARGET: "/data/.hermes/lazy-packages",
     HOME: "/data",
   },
 });

@@ -2,7 +2,7 @@
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/hermes-railway-template?referralCode=uTN7AS&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
-Deploy [Hermes Agent](https://github.com/NousResearch/hermes-agent) to Railway as a worker service with persistent state.
+Deploy [Hermes Agent](https://github.com/NousResearch/hermes-agent) to Railway as a worker service with persistent state. New deployments use the official Hermes Docker image; the previous Git source build remains available automatically for existing deployments that set `HERMES_GIT_REF`.
 
 This template is worker-only: setup and configuration are done through Railway Variables, then the container bootstraps Hermes automatically on first run.
 
@@ -16,9 +16,10 @@ This template is worker-only: setup and configuration are done through Railway V
 ## How it works
 
 1. You configure required variables in Railway.
-2. On first boot, entrypoint initializes Hermes under `/data/.hermes`.
-3. On future boots, the same persisted state is reused.
-4. Container starts `hermes gateway`.
+2. Railway uses the official `nousresearch/hermes-agent` image selected by `HERMES_IMAGE_VERSION`.
+3. On first boot, entrypoint initializes Hermes under `/data/.hermes`.
+4. On future boots, the same persisted state is reused.
+5. Container starts `hermes gateway`.
 
 ## Railway deploy instructions
 
@@ -58,7 +59,7 @@ normal first-deploy path for end users.
 This template defaults to Telegram + OpenRouter. These are the default variables to fill when deploying:
 
 ```env
-HERMES_GIT_REF=""
+HERMES_IMAGE_VERSION="latest"
 OPENROUTER_API_KEY=""
 TELEGRAM_BOT_TOKEN=""
 TELEGRAM_ALLOWED_USERS=""
@@ -141,14 +142,40 @@ Helpful first checks:
 Do not run `hermes update` inside a Railway deployment.
 
 - `hermes update` mutates the live container and can leave persisted `/data/.hermes/config.yaml` ahead of the image that Railway boots on the next deploy.
-- On Railway, update Hermes by changing `HERMES_GIT_REF` in service Variables to a pinned tag or commit, then redeploy.
-- Railway exposes service variables at build time, and this template uses `ARG HERMES_GIT_REF` in the Dockerfile, so the build is pinned from that variable.
+- On Railway, update the default image-based deployment by changing `HERMES_IMAGE_VERSION`, then redeploy.
+- `HERMES_IMAGE_VERSION` is appended only to the fixed official image repository `nousresearch/hermes-agent:`.
 
 Recommended flow:
 
-1. Set `HERMES_GIT_REF` to a specific upstream tag or commit SHA.
+1. Set `HERMES_IMAGE_VERSION` to `latest`, `main`, or a published release tag such as `v2026.8.31`.
 2. Deploy or redeploy the service.
 3. If upstream introduced new config options, run `hermes config migrate` over Railway SSH after the redeploy.
+
+For reproducible deployments, prefer a published release tag over the mutable `latest` or `main` tags.
+
+## Deprecated source-build compatibility
+
+`HERMES_GIT_REF` is deprecated but remains functional for backward compatibility. When it is present and non-empty, the Dockerfile automatically selects the previous source-build path instead of the official image path:
+
+```env
+HERMES_GIT_REF=v2026.8.31
+```
+
+The legacy path still supports release tags, branches, and arbitrary commit SHAs. Existing deployments with a non-empty `HERMES_GIT_REF` therefore keep their current build behavior without adding another mode variable or changing the Dockerfile path.
+
+To migrate an existing deployment to the recommended official-image path:
+
+1. Remove `HERMES_GIT_REF` or set it to an empty value.
+2. Set `HERMES_IMAGE_VERSION` to `latest`, `main`, or a published release tag.
+3. Redeploy.
+
+The persistent Railway volume remains mounted at `/data`, and Hermes state remains under `/data/.hermes` in both modes. In official-image mode, the template keeps the upstream entrypoint and supervision stack, then applies a small stage-2 adapter that makes the Railway volume and `/data/workspace` writable by the image's unprivileged `hermes` runtime user.
+
+### GitHub 429 warning for legacy builds
+
+The legacy source-build path fetches `NousResearch/hermes-agent` from GitHub during every uncached Railway build. Railway build cache hits are not guaranteed, and GitHub may throttle concentrated CI traffic with HTTP `429 Too Many Requests`. Immediate redeploy retries can hit the same limit again.
+
+This warning applies only to deployments with a non-empty `HERMES_GIT_REF`. The default official-image path does not clone the Hermes Git repository during the Railway build. If legacy builds repeatedly fail with GitHub 429 responses, remove `HERMES_GIT_REF`, select a published version through `HERMES_IMAGE_VERSION`, and redeploy.
 
 ## Running Hermes commands manually
 
@@ -175,31 +202,56 @@ Entrypoint (`scripts/entrypoint.sh`) does the following:
 - Persists one-time marker `${HERMES_HOME}/.initialized`
 - Starts `hermes gateway`
 
+The Dockerfile chooses one complete build branch before runtime:
+
+- empty or absent `HERMES_GIT_REF` → official `nousresearch/hermes-agent:${HERMES_IMAGE_VERSION}` image
+- non-empty `HERMES_GIT_REF` → deprecated Python source build at that Git ref
+
+Railway uses Docker BuildKit, so the unselected branch is not built.
+
 ## Troubleshooting
 
 - `401 Missing Authentication header`: provider/key mismatch (often wrong provider auto-selection or missing API key for selected provider).
 - Bot connected but no replies: check allowlist variables and user IDs.
 - Data lost after redeploy: verify Railway volume is mounted at `/data`.
 
-## Build pinning
+## Version selection
 
-This template requires `HERMES_GIT_REF` to be set explicitly.
+The two variables select different build sources and do not accept the same kinds of values:
 
-Railway service variables are available at build time, and the Dockerfile reads:
+- `HERMES_IMAGE_VERSION` selects a tag published for the fixed Docker image repository `nousresearch/hermes-agent`. Use `latest`, `main`, or an available release tag such as `v2026.8.31`. A Git branch name, commit SHA, or arbitrary Git ref works here only if upstream has also published a Docker image with that exact tag; otherwise the image pull fails.
+- `HERMES_GIT_REF` selects source code directly from the `NousResearch/hermes-agent` Git repository. It accepts any ref GitHub can fetch, including a release tag, branch, or commit SHA. Because any non-empty value activates the deprecated source-build path, it takes precedence over `HERMES_IMAGE_VERSION`.
 
-- `ARG HERMES_GIT_REF`
+New deployments use the official image and default to:
 
-Set `HERMES_GIT_REF` in Railway Variables to a pinned upstream tag or commit SHA.
+```env
+HERMES_IMAGE_VERSION=latest
+```
 
-Examples:
+Official-image examples:
 
-- `HERMES_GIT_REF=v2026.5.16`
-- `HERMES_GIT_REF=4f3c2b1`
+```env
+HERMES_IMAGE_VERSION=v2026.8.31
+HERMES_IMAGE_VERSION=main
+HERMES_IMAGE_VERSION=latest
+```
+
+Deprecated source-build examples:
+
+```env
+HERMES_GIT_REF=v2026.8.31
+HERMES_GIT_REF=main
+HERMES_GIT_REF=29112bef099274229cadff79cdff7bf7b99c4b77
+```
 
 ## Local smoke test
 
 ```bash
-docker build --build-arg HERMES_GIT_REF=v2026.5.16 -t hermes-railway-template .
+# Recommended official-image path
+docker build --build-arg HERMES_IMAGE_VERSION=v2026.8.31 -t hermes-railway-template .
+
+# Deprecated source-build compatibility path
+docker build --build-arg HERMES_GIT_REF=v2026.8.31 -t hermes-railway-template:legacy .
 
 docker run --rm \
   -e OPENROUTER_API_KEY=sk-or-xxx \
