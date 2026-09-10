@@ -80,10 +80,12 @@ set -eu
 /opt/hermes/docker/stage2-hook-upstream.sh "$@"
 
 # Railway mounts the persistent volume at /data, while the official image
-# normally owns /opt/data. Make the dedicated Railway volume and workspace
-# writable by the final (possibly remapped) hermes user before command dispatch.
+# normally owns /opt/data. HERMES_HOME is dedicated runtime state, so repair
+# stale ownership left by earlier images or root bootstrap operations. Keep the
+# user workspace non-recursive: it may contain intentionally foreign-owned data.
 mkdir -p /data/.hermes /data/workspace
-chown hermes:hermes /data /data/.hermes /data/workspace
+chown hermes:hermes /data /data/workspace
+chown -R hermes:hermes /data/.hermes
 EOF
 
 CMD ["/app/scripts/entrypoint.sh"]
