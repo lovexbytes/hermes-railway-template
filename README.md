@@ -47,6 +47,8 @@ HERMES_IMAGE_VERSION=v2026.8.31
 
 Existing deployments with `HERMES_GIT_REF` continue to build Hermes directly from that Git ref. To switch to the official image, remove or empty `HERMES_GIT_REF`, set `HERMES_IMAGE_VERSION`, and redeploy.
 
+This compatibility path is deprecated, is not maintained against new Hermes releases, and will not receive compatibility updates. If you pin `HERMES_GIT_REF`, expect build or runtime problems as upstream dependencies and packaging change over time. New and existing deployments should use a published `HERMES_IMAGE_VERSION` instead.
+
 Legacy source builds fetch GitHub during uncached Railway builds and may fail with `429 Too Many Requests` when GitHub rate-limits build traffic. Retrying immediately may hit the same limit. Prefer the official-image path to avoid cloning Hermes during the build.
 
 ## Updating Hermes
