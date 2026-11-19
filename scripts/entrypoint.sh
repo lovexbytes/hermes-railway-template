@@ -155,6 +155,10 @@ configure_agent_cache_memory_limit() {
 
 validate_platforms
 
+# The official s6 image restarts the last-running gateway before this script runs.
+# Stop it so config, .env and the storage migration apply with no live writer.
+hermes gateway stop >/dev/null 2>&1 || true
+
 migrate_legacy_messaging_cwd
 configure_agent_cache_memory_limit
 
@@ -196,7 +200,8 @@ fi
 # command is resumable and becomes a cheap no-op after the v23 marker is set.
 if [[ -f "${HERMES_HOME}/state.db" ]]; then
   echo "[bootstrap] Optimizing Hermes session-index storage..."
-  hermes sessions optimize-storage --yes
+  hermes sessions optimize-storage --yes \
+    || echo "[bootstrap] WARNING: session-index optimization did not run; continuing." >&2
 fi
 
 echo "[bootstrap] Starting Hermes gateway..."

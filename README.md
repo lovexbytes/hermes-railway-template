@@ -7,7 +7,7 @@ Deploy [Hermes Agent](https://github.com/NousResearch/hermes-agent) to Railway a
 ## Deploy
 
 1. Click **Deploy on Railway**.
-2. Configure at least one messaging platform in Railway Variables. Its token is required; provider variables are optional.
+2. Configure Telegram, Discord, or Slack in Railway Variables. The container exits at boot unless one of these is set: `TELEGRAM_BOT_TOKEN`, `DISCORD_BOT_TOKEN`, or both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN`. Provider variables are optional.
 3. Add your user ID to the platform allowlist.
 4. Deploy. If using Hermes OAuth, complete the provider login through Railway SSH, then send your bot a message.
 
@@ -29,7 +29,7 @@ Allowlist values are comma-separated IDs without brackets or quoted arrays:
 TELEGRAM_ALLOWED_USERS=123456789,987654321
 ```
 
-You can use other inference providers and messaging platforms supported by Hermes. See the [official Hermes repository](https://github.com/NousResearch/hermes-agent) for the current configuration options and environment variables; this template does not duplicate the upstream reference.
+You can use other inference providers supported by Hermes, and add other messaging platforms next to the required Telegram, Discord, or Slack token. See the [official Hermes repository](https://github.com/NousResearch/hermes-agent) for the current configuration options and environment variables; this template does not duplicate the upstream reference.
 
 OpenAI Codex subscribers can deploy with `TELEGRAM_BOT_TOKEN` (and their allowlist) but no provider API key. After deployment, use Railway SSH to run `hermes model` and select **ChatGPT** or **Codex Subscription (Hermes OAuth)**, then message the bot. Complete this login in the deployed persistent `HERMES_HOME` (`/data/.hermes` by default), not on your local machine.
 
